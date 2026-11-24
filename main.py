@@ -17,6 +17,26 @@ assert LINE.strip(), "line must not be only whitespace"
 assert LINE == LINE.strip(), "line must not carry leading/trailing whitespace"
 assert "\n" not in LINE, "line must be a single line"
 assert LINE.endswith("."), "line must end with a period"
+assert all(ord(c) < 128 for c in LINE), "line must be ASCII so its byte size equals its character count (the Size tie-break counts bytes)"
+
+
+def verify(path: str) -> None:
+    """Read back the written file and fail loudly unless it holds exactly LINE.
+
+    Separate from main() so writing and verification are independently auditable:
+    size first (catches encoding or newline drift), then byte equality, then text
+    equality with an explicit single-line check.
+    """
+    if os.path.getsize(path) != len(LINE.encode("utf-8")):
+        raise SystemExit("entry.txt size does not match the approved line")
+    with open(path, "rb") as f:
+        raw = f.read()
+    if raw != LINE.encode("utf-8"):
+        raise SystemExit("entry.txt does not match the approved line")
+    with open(path, "r", encoding="utf-8", newline="\n") as f:
+        written = f.read()
+    if written != LINE or "\n" in written:
+        raise SystemExit("entry.txt does not match the approved line")
 
 
 def main() -> None:
@@ -28,16 +48,7 @@ def main() -> None:
     # Deterministic permissions: the entry must be readable (0644)
     # no matter what umask the sandbox runs with.
     os.chmod(path, 0o644)
-    # Read-back check: the file on disk must hold exactly the approved
-    # line, byte for byte; otherwise fail loudly, never silently.
-    with open(path, "rb") as f:
-        raw = f.read()
-    if raw != LINE.encode("utf-8"):
-        raise SystemExit("entry.txt does not match the approved line")
-    with open(path, "r", encoding="utf-8", newline="\n") as f:
-        written = f.read()
-    if written != LINE:
-        raise SystemExit("entry.txt does not match the approved line")
+    verify(path)
 
 
 if __name__ == "__main__":
